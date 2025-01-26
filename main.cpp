@@ -1,51 +1,61 @@
 #include "uop_msb.h"
 #include "mbed.h"
-#include "ID12RFID.h"
 #include "ds3231.h"
 #include <chrono>
 
-// Hello World for printing RFID tag numbers
-
-// Set up the serial port (adjust pins as needed)
+// Set up the serial port 
 static UnbufferedSerial serial_port(D1, D0);  // RX, TX pins
 
 // Define buffer size to store the RFID tag bytes
-uint8_t tag_data[12];  // Assuming a max of 12 bytes (adjust based on your RFID tag format)
-int tag_index = 0;
+uint8_t tag_data[12];  
+int byteNum = 0;
 int ID = 0;
 
-I2C i2c(D14, D15); // SDA, SCL pins
+//I2C i2c(D14, D15); // SDA, SCL pins
 Ds3231 rtc(D14, D15); // Create RTC object
 
-// Create a structure to hold the time data
+// Create structures to hold the date and time data
 ds3231_time_t Time;
+ds3231_calendar_t Calendar; 
+
 int main() {
 
+    // // Set the time
+    // time.hours = 15;            // Hour = 12
+    // time.minutes = 49;           // Minute = 0
+    // time.seconds = 0;           // Second = 0
+    // time.am_pm = 0;             // AM (0 for PM, 1 for AM)
+    // time.mode = 0;              // 24-hour mode
+    // // Set the time on the DS3231
+    // uint16_t result = rtc.set_time(time);
+    // // Set the date
+    // calendar.day = 1;        // Day = Saturday (1=Sunday, ..., 7=Saturday)
+    // calendar.date = 26;      // Date = 26
+    // calendar.month = 1;      // Month = January
+    // calendar.year = 25;      // Year = 25 (representing 2025)
+    // // Set the calendar on the DS3231
+    // result = rtc.set_calendar(calendar);
+
     // Get the current time from the RTC
-        rtc.get_time(&Time);
+    //rtc.get_time(&Time);
+    // Get the current date from the RTC
+    //rtc.get_calendar(&Calendar);
+    
+    // Print the time
+    //printf("%02d/%02d/20%02d %02d:%02d:%02d\n", Calendar.date, Calendar.month, Calendar.year, Time.hours, Time.minutes, Time.seconds);
+    //printf("Date: %02d/%02d/20%02d\n", calendar.date, calendar.month, calendar.year);
 
-        // Print the time
-        printf("Time: %02d:%02d:%02d\n", Time.hours, Time.minutes, Time.seconds);
-
-    while(1) {
+    while(true) {
         if (serial_port.readable()) {
             // Read one byte from the RFID reader
-            int num_bytes = serial_port.read(&tag_data[tag_index], 1);
+            int num_bytes = serial_port.read(&tag_data[byteNum], 1);
 
             // Check if the byte is valid
             if (num_bytes > 0) {
-                tag_index++;  // Move to the next byte in the buffer
+                byteNum++;  // Move to the next byte in the buffer
                 
                 // Check if we've received the full tag
-                // (For example, if the tag is 12 bytes long, adjust as necessary)
-                if (tag_index >= 12) {
-                    // Tag data received, print the full tag
-                    //printf("RFID Tag received: ");
-                    // for (int i = 0; i < 12; i++) {
-                    //     printf("%02X \n", tag_data[i]);
-                    // }
-                    //printf("\n");
-
+                if (byteNum >= 12) {
                     // Convert the first 4 bytes into the first int
                     int Tag1 = (tag_data[0] << 24) | (tag_data[1] << 16) | (tag_data[2] << 8) | tag_data[3];
                     
@@ -69,20 +79,23 @@ int main() {
                     }
 
                     if (ID >= 1 && ID <= 4){
-                        printf("Tag ID = %d\n", ID);
+                        // Get the current time from the RTC
+                        rtc.get_time(&Time);
+                        // Get the current date from the RTC
+                        rtc.get_calendar(&Calendar);
+                        
+                        // Print the time
+                        printf("%02d/%02d/20%02d %02d:%02d:%02d\n", Calendar.date, Calendar.month, Calendar.year, Time.hours, Time.minutes, Time.seconds);
+
+                        // Print the Tag ID
+                        printf("Tag ID = %d\n\n", ID);
                     }
                     else {
-                        printf("Invalid ID Tag\n");
+                        printf("Invalid ID Tag\n\n");
                     }
-                    
-
-                    // // Print the integers in hexadecimal
-                    // printf("Tag Part One: %08X\n", Tag1);
-                    // printf("Tag Part Two: %08X\n", Tag2);
-                    // printf("Tag Part Three: %08X\n", Tag3);
 
                     // Reset the tag buffer for the next tag
-                    tag_index = 0;
+                    byteNum = 0;
                 }
             }
         }
