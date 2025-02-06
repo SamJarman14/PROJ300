@@ -1,17 +1,141 @@
-#include "uop_msb.h"
 #include "mbed.h"
 #include "ds3231.h"
 #include <chrono>
+#include "getdistance.h"
+#include "motor.h"
+
+Motor Wheel(D13,D11,D9,D10);      //Instance of the Motor Class called 'Wheel' see motor.h and motor.cpp
+
+//Variable 'duty' for programmer to use to vary speed as required set here to #define compiler constant see above
+float duty = 0.2;
 
 // Set up the serial port 
 static UnbufferedSerial serial_port(D1, D0);  // RX, TX pins
 
+// Define row pins (outputs)
+DigitalOut row1(D5);
+DigitalOut row2(D6);
+DigitalOut row3(D7);
+DigitalOut row4(D4);
+
+// Define column pins (inputs with pull-up resistors)
+DigitalIn col1(A4, PullUp);
+DigitalIn col2(A5, PullUp);
+DigitalIn col3(A2, PullUp); 
+DigitalIn col4(A3, PullUp);
+
+
+bool lastKeyState[4][4] = {false};  // For 4 rows x 4 columns keypad
+
+// Define correct password (example: "1234")
+char correctPassword[] = {'1', '2', '3', '4'};
+char enteredPassword[4];  // Array to store entered password
+int passwordIndex = 0;    // Index to track entered password position
+
+void scanKeypad() {
+    // Set all rows to HIGH initially
+    row1 = 1;
+    row2 = 1;
+    row3 = 1;
+    row4 = 1;
+
+    // Scan rows one by one
+    for (int row = 0; row < 4; row++) {
+        // Activate the current row by setting it LOW
+        if (row == 0) row1 = 0;
+        if (row == 1) row2 = 0;
+        if (row == 2) row3 = 0;
+        if (row == 3) row4 = 0;
+
+        // Check each column for key press or release
+        for (int col = 0; col < 4; col++) {
+            bool currentKeyState = (col == 0 ? col1 : (col == 1 ? col2 : (col == 2 ? col3 : col4))).read() == 0;  // Detect key press (LOW)
+            
+            // If the key is released (column goes HIGH) and the key was previously pressed, record the key
+            if (!currentKeyState && lastKeyState[row][col]) {
+                char key = '\0';  // Initialize the key variable
+
+                // Map the row and column to the corresponding key
+                if (row == 0) {
+                    if (col == 0) key = '1';
+                    if (col == 1) key = '2';
+                    if (col == 2) key = '3';
+                    if (col == 3) key = 'A';
+                }
+                else if (row == 1) {
+                    if (col == 0) key = '4';
+                    if (col == 1) key = '5';
+                    if (col == 2) key = '6';
+                    if (col == 3) key = 'B';
+                }
+                else if (row == 2) {
+                    if (col == 0) key = '7';
+                    if (col == 1) key = '8';
+                    if (col == 2) key = '9';
+                    if (col == 3) key = 'C';
+                }
+                else if (row == 3) {
+                    if (col == 0) key = '*';
+                    if (col == 1) key = '0';
+                    if (col == 2) key = '#';
+                    if (col == 3) key = 'D';
+                }
+
+                // If the key is valid, add it to the entered password
+                if (key != '\0' && passwordIndex < 4) {
+                    enteredPassword[passwordIndex++] = key;  // Store the entered key
+                    printf("Key %c entered\n", key);  // Print the entered key
+                }
+
+                // If the password is fully entered, check it
+                if (passwordIndex == 4) {
+                    // Compare entered password with correct password
+                    bool correct = true;
+                    for (int i = 0; i < 4; i++) {
+                        if (enteredPassword[i] != correctPassword[i]) {
+                            correct = false;
+                            break;
+                        }
+                    }
+
+                    // Print the result based on the comparison
+                    if (correct) {
+                        printf("Password correct!\n");
+                    } else {
+                        printf("Incorrect password!\n");
+                    }
+
+                    // Reset the password entry
+                    passwordIndex = 0;
+                }
+            }
+            // Update the last key state to the current state
+            lastKeyState[row][col] = currentKeyState;
+
+        }
+
+        // Deactivate the current row by setting it HIGH
+        if (row == 0) row1 = 1;
+        if (row == 1) row2 = 1;
+        if (row == 2) row3 = 1;
+        if (row == 3) row4 = 1;
+    }
+}
+
+
+
+
+
+
+
+
+AnalogIn sensorPin(A0);  // Analog input pin connected to Pressure Sensor output
+
 // Define buffer size to store the RFID tag bytes
 uint8_t tag_data[12];  
-int byteNum = 0;
+int Curr_Byte = 0;
 int ID = 0;
 
-//I2C i2c(D14, D15); // SDA, SCL pins
 Ds3231 rtc(D14, D15); // Create RTC object
 
 // Create structures to hold the date and time data
@@ -19,6 +143,7 @@ ds3231_time_t Time;
 ds3231_calendar_t Calendar; 
 
 int main() {
+   
 
     // // Set the time
     // time.hours = 15;            // Hour = 12
@@ -36,26 +161,35 @@ int main() {
     // // Set the calendar on the DS3231
     // result = rtc.set_calendar(calendar);
 
-    // Get the current time from the RTC
-    //rtc.get_time(&Time);
-    // Get the current date from the RTC
-    //rtc.get_calendar(&Calendar);
-    
-    // Print the time
-    //printf("%02d/%02d/20%02d %02d:%02d:%02d\n", Calendar.date, Calendar.month, Calendar.year, Time.hours, Time.minutes, Time.seconds);
-    //printf("Date: %02d/%02d/20%02d\n", calendar.date, calendar.month, calendar.year);
-
     while(true) {
+
+        // Wheel.Speed(duty,duty);
+        // wait_us(500000);
+        // Wheel.Speed(0,0);
+        // wait_us(1000000);
+
+        scanKeypad();
+        wait_us(100000); // Debounce delay
+
+        // float sensorValue = sensorPin.read();  // Read the analog value (0.0 to 1.0)
+        // printf("Sensor Value: %.3f\n", sensorValue);
+        // wait_us(500000);  // Wait for half a second before reading again
+
+        // int dist = getdistance()/10;
+        // printf("distance is %d\n", dist);
+        // wait_us(100000);
+
+
         if (serial_port.readable()) {
             // Read one byte from the RFID reader
-            int num_bytes = serial_port.read(&tag_data[byteNum], 1);
+            int Byte = serial_port.read(&tag_data[Curr_Byte], 1);
 
             // Check if the byte is valid
-            if (num_bytes > 0) {
-                byteNum++;  // Move to the next byte in the buffer
+            if (Byte > 0) {
+                Curr_Byte++;  // Move to the next byte in the buffer
                 
                 // Check if we've received the full tag
-                if (byteNum >= 12) {
+                if (Curr_Byte >= 12) {
                     // Convert the first 4 bytes into the first int
                     int Tag1 = (tag_data[0] << 24) | (tag_data[1] << 16) | (tag_data[2] << 8) | tag_data[3];
                     
@@ -95,7 +229,7 @@ int main() {
                     }
 
                     // Reset the tag buffer for the next tag
-                    byteNum = 0;
+                    Curr_Byte = 0;
                 }
             }
         }
