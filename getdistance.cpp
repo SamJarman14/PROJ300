@@ -1,6 +1,6 @@
 #include "mbed.h"
 
-DigitalOut Trigger(D7); 
+DigitalOut Trigger(D3); 
 DigitalIn Echo(D2);
 Timer pulse;
 

@@ -4,10 +4,14 @@
 #include "getdistance.h"
 #include "motor.h"
 
-Motor Wheel(D13,D11,D9,D10);      //Instance of the Motor Class called 'Wheel' see motor.h and motor.cpp
+#include "SDCard.h"
+
+DigitalOut buzzer(A0);
+
+//Motor Wheel(D13,D11,D9,D10);      //Instance of the Motor Class called 'Wheel' see motor.h and motor.cpp
 
 //Variable 'duty' for programmer to use to vary speed as required set here to #define compiler constant see above
-float duty = 0.2;
+float duty = 0.9;
 
 // Set up the serial port 
 static UnbufferedSerial serial_port(D1, D0);  // RX, TX pins
@@ -52,7 +56,7 @@ void scanKeypad() {
             bool currentKeyState = (col == 0 ? col1 : (col == 1 ? col2 : (col == 2 ? col3 : col4))).read() == 0;  // Detect key press (LOW)
             
             // If the key is released (column goes HIGH) and the key was previously pressed, record the key
-            if (!currentKeyState && lastKeyState[row][col]) {
+            if (currentKeyState && !lastKeyState[row][col]) {
                 char key = '\0';  // Initialize the key variable
 
                 // Map the row and column to the corresponding key
@@ -85,7 +89,15 @@ void scanKeypad() {
                 if (key != '\0' && passwordIndex < 4) {
                     enteredPassword[passwordIndex++] = key;  // Store the entered key
                     printf("Key %c entered\n", key);  // Print the entered key
+
+
+                    // Activate the buzzer for 1 second when a valid key is pressed
+                    buzzer = 1;  // Turn on buzzer
+                    wait_us(250000);  // Wait for 1 second
+                    buzzer = 0;  // Turn off buzzer
                 }
+
+                
 
                 // If the password is fully entered, check it
                 if (passwordIndex == 4) {
@@ -122,14 +134,7 @@ void scanKeypad() {
     }
 }
 
-
-
-
-
-
-
-
-AnalogIn sensorPin(A0);  // Analog input pin connected to Pressure Sensor output
+//AnalogIn sensorPin(A0);  // Analog input pin connected to Pressure Sensor output
 
 // Define buffer size to store the RFID tag bytes
 uint8_t tag_data[12];  
@@ -142,8 +147,18 @@ Ds3231 rtc(D14, D15); // Create RTC object
 ds3231_time_t Time;
 ds3231_calendar_t Calendar; 
 
+// SPI pins (example for NUCLEO-F429ZI)
+SPI spi(PB_15, PB_14, PB_13);  // MOSI, MISO, SCK
+DigitalOut cs(PC_10);           // Chip Select
+
+SDCard sd(D11, D12, D13, D10, NC);
+
 int main() {
-   
+    
+
+    int err = sd.print_file("RFID_Tags.txt", 0); 
+
+
 
     // // Set the time
     // time.hours = 15;            // Hour = 12
@@ -168,15 +183,15 @@ int main() {
         // Wheel.Speed(0,0);
         // wait_us(1000000);
 
-        scanKeypad();
-        wait_us(100000); // Debounce delay
+        //scanKeypad();
+        //wait_us(100000); // Debounce delay
 
         // float sensorValue = sensorPin.read();  // Read the analog value (0.0 to 1.0)
         // printf("Sensor Value: %.3f\n", sensorValue);
         // wait_us(500000);  // Wait for half a second before reading again
 
         // int dist = getdistance()/10;
-        // printf("distance is %d\n", dist);
+        // printf("distance is %dcm\n", dist);
         // wait_us(100000);
 
 
