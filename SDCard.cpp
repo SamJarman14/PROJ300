@@ -1,4 +1,6 @@
 #include "SDCard.h"
+#include <fstream>
+
 // Function: SDCard class constructor
 // Initialises the SDBlockDevice object
 SDCard::SDCard(PinName mosi,PinName miso,PinName sclk,PinName cs, PinName detect) : sd(mosi,miso,sclk,cs), sd_detect(detect){
@@ -111,14 +113,13 @@ int SDCard::write_file(char* filename, char* text_to_write, bool append, bool pr
 // Function: SDCard class print_file
 // Reads the data from a file and prints it to the terminal
 
-int SDCard::print_file(char* filename, bool print_debug ){
-    if(print_debug){
+int SDCard::read_file(const char* filename, std::vector<std::string>& buffer, bool print_debug) {
+    if (print_debug) {
         printf("Initialise and read from a file\n");
     }
 
-    // call the SDBlockDevice instance initialisation method.
-    if ( 0 != sd.init()) {
-        if(print_debug){
+    if (sd.init() != 0) {
+        if (print_debug) {
             printf("Init failed \n");
         }
         return -1;
@@ -126,45 +127,39 @@ int SDCard::print_file(char* filename, bool print_debug ){
 
     FATFileSystem fs("sd", &sd);
     char file_path[128];
-    sprintf(file_path,"/sd/%s",filename);
-    FILE *fp = fopen(file_path,"r");
-    if(fp == NULL) {
-        error("Could not open or find file for read\n");
+    sprintf(file_path, "/sd/%s", filename);
+    FILE *fp = fopen(file_path, "r");
+
+    if (fp == NULL) {
+        printf("Error: Could not open file %s\n", file_path);
         sd.deinit();
         return -1;
-    } else {
+    }
 
-        // Initialize the line counter
-        int line_count = 0;
+    buffer.clear();  // Clear buffer before reading
 
-
-        //Check for text in the file and count how many lines so we know how many active tags
-        char buff[128]; buff[127] = 0;
-        while (fgets(buff, sizeof(buff), fp)) {
-        // Strip trailing newline if it exists
+    char buff[128];  
+    while (fgets(buff, sizeof(buff), fp)) {
         size_t len = strlen(buff);
         if (len > 0 && buff[len - 1] == '\n') {
-            buff[len - 1] = '\0';  // Remove newline character
+            buff[len - 1] = '\0';  // Remove newline
         }
-
-        line_count++;  // Increment the line counter for each line read
-        printf("%s\n", buff);  // Print each line from the file
+        buffer.push_back(std::string(buff));  // Store line in buffer
     }
 
-        //Tidy up here
-        fclose(fp);
+    fclose(fp);
+    sd.deinit();
 
-        // Print the total number of lines read
-        printf("\nTotal lines read: %d\n", line_count);
-
-
-        if(print_debug){
-            printf("\nSD Print done...\n");
+    if (print_debug) {
+        printf("\nSD Read done. Loaded Tags:\n");
+        for (size_t i = 0; i < buffer.size(); ++i) {
+            printf("Tag %zu: %s\n", i + 1, buffer[i].c_str());
         }
-        sd.deinit();
-        return 0;
     }
+
+    return 0;
 }
+
 // Function: SDCard class copy_file
 // Reads data from a file and copies it to an array
 int SDCard::copy_file(char* filename, char* dest, int dest_size,bool print_debug){

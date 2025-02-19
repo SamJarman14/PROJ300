@@ -1,9 +1,17 @@
 
 #include "mbed.h"
-#include "MSB_Config.h"
 
 #include "SDBlockDevice.h"
 #include "FATFileSystem.h"
+
+#include <vector>    // Required for std::vector
+#include <string>    // Required for std::string
+#include <fstream>
+
+
+// Declare extern to use the vector across multiple files
+extern std::vector<std::string> rfid_tags;
+
 
 class SDCard{
     private:
@@ -19,11 +27,10 @@ class SDCard{
         // Write data from an array to a file
         int write_file(char* filename, char* text_to_write,bool append = true, bool print_debug = true);
         // Reads the data from a file and prints it to the terminal
-        int print_file(char* filename,bool print_debug = true);
+        int read_file(const char* filename, std::vector<std::string>& tag_list, bool print_debug);
         // Reads data from a file and copies it to an array
         int copy_file(char* filename, char* dest, int dest_size, bool print_debug = true);
 
         bool card_inserted();
-
 };
 
