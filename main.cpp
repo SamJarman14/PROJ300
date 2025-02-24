@@ -10,15 +10,21 @@
 
 #include "SDCard.h"
 
-DigitalOut buzzer(A0);
+
+DigitalOut buzzer(D8);
 
 Motor Wheel(D13,D11,D9,D10);      //Instance of the Motor Class called 'Wheel' see motor.h and motor.cpp
 
 //Variable 'duty' for programmer to use to vary speed as required 
 float duty = 0.9;
 
-// Set up the serial port 
-static UnbufferedSerial serial_port(D1, D0);  // RX, TX pins
+// Set up the serial port for communication with ESP32
+UnbufferedSerial esp32(D1, D0, 115200);  // TX, RX pins
+
+// Set up the serial port for communication with RFID Reader
+UnbufferedSerial serial_port(NC, A0);  // TX, RX pins
+
+
 
 // Define row pins (outputs)
 DigitalOut row1(D5);
@@ -151,7 +157,7 @@ Ds3231 rtc(D14, D15); // Create RTC object
 ds3231_time_t Time;
 ds3231_calendar_t Calendar; 
 
-// SPI pins (example for NUCLEO-F429ZI)
+// SPI pins 
 SPI spi(PB_15, PB_14, PB_13);  // MOSI, MISO, SCK
 DigitalOut cs(PC_10);           // Chip Select
 
@@ -160,6 +166,11 @@ SDCard sd(D11, D12, D13, D10, NC);
 // Vector to store the numbers as strings
 std::vector<std::string> rfid_tags;  // Stores ordered list of tags
 std::unordered_set<std::string> rfid_set;  // For quick lookups
+
+
+
+
+
 
 void load_tags_from_sd() {
     std::vector<std::string> buffer;
@@ -381,11 +392,63 @@ void rename_tag() {
 }
 
 
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+int attempt_count = 0; // Counter for incorrect password attempts
+//time_t last_attempt_time = 0; // Last incorrect attempt time
+bool lockout_message_printed = false; // Flag to prevent multiple lockout messages
+
+// Global flag for access lockout
+bool access_locked = false;
+time_t lockout_start_time = 0;  // Time when the lockout started
+
 void master_function()
 {
     char user_input[8];    // space for characters and pressing enter
-    while(true){
+    //int attempt_count = 0; // Counter for incorrect password attempts
+    //time_t last_attempt_time = 0; // Last incorrect attempt time
+    // bool lockout_message_printed = false; // Flag to prevent multiple lockout messages
+
+    while(true) {
+        // Check if there was a timeout since last incorrect attempt
+        if (attempt_count >= 3) {
+            time_t current_time = time(NULL);
+            double seconds_elapsed = difftime(current_time, lockout_start_time);
+
+            if (seconds_elapsed < 10) {
+                // If less than 30 seconds have passed since the last attempt, deny access
+                if (!lockout_message_printed) {
+                    printf("\nAccess Locked. Please wait before trying again.\n");
+                    access_locked = true;  // Lock access
+                    lockout_message_printed = true; // Mark the message as printed
+                }
+                // Skip the password check, just continue the loop until timeout
+                return;  // Recheck the timeout condition in the next loop iteration
+            } else {
+                // Reset the counter after timeout
+                attempt_count = 0;
+                lockout_message_printed = false; // Reset the flag after the lockout period
+                access_locked = false;  // Unlock access
+            }
+        }
+
+        // Only ask for password if not locked out
         printf("\n\nEnter master access password...\nOr enter 'exit' to quit\n");
+
         // Use fgets instead of scanf to safely read input
         fgets(user_input, sizeof(user_input), stdin);
         // Remove trailing newline from fgets input
@@ -394,7 +457,6 @@ void master_function()
         if (strcmp(user_input, "jarman") == 0) {
             printf("\n\nMaster Card Access Granted");
             while(true){
-
                 printf("\nPlease choose a function...\nType 'add' to add a new RFID tag to the system\nType 'remove' to remove a RFID tag from the system\nType 'rename' to rename a tag\nType 'exit' to exit master access\n");
 
                 // Use fgets instead of scanf to safely read input
@@ -406,36 +468,60 @@ void master_function()
                     process_tag(true);
                 }
                 else if (strcmp(user_input, "remove") == 0) {
-                   process_tag(false);
+                    process_tag(false);
                 }
                 else if (strcmp(user_input, "rename") == 0) {
                     rename_tag();  // Call the rename function
                 } 
                 else if (strcmp(user_input, "exit") == 0) {
                     // Handle exit case
-                    printf("Master access exited\n");
+                    printf("\nMaster access exited\n");
                     return;  // Exit function
                 } 
                 else {
                     // If the input doesn't match any of the above
-                    printf("Invalid input\n");
+                    printf("\nInvalid input\n");
                 }
             }
         }
         else if(strcmp(user_input, "exit") == 0) {
             // Handle exit case
-            printf("Master access exited\n");
+            printf("\nMaster access exited\n");
             return;  // Exit function
         }
-        else{
+        else {
             // If the input doesn't match any of the above
-            printf("Incorrect Password\n");
+            attempt_count++;  // Increment the incorrect password attempt count
+            lockout_start_time = time(NULL);  // Record the time of the incorrect attempt
+            printf("\nIncorrect Password\n");
+            
+            if (attempt_count >= 3) {
+                // Action after 3 incorrect attempts
+                esp32.write("T\n", 2); // Send the signal to the ESP32
+                printf("\nToo many incorrect attempts. Access locked for 10 seconds.\n");
+                access_locked = true;  // Lock access
+                return;
+            }
         }
-    }   
+    }
 }
 
 
+
+
+
+
+
+
+
+
+
+
 int main() {
+
+    printf("\nSystem Running...\n");
+
+    //esp32.write("T\n", 2); // Send the signal to the ESP32
     
     // Load tags into memory from SD card at startup
     load_tags_from_sd();
@@ -483,8 +569,14 @@ int main() {
                     char master[] = "023341303036424537464334";
 
                     if (strcmp(tag_string, master) == 0) {
-                        master_function();
                         skip_match_check = true;
+                        if (access_locked) {
+                            printf("Access Denied\n");  // Deny access if locked
+                            //skip_match_check = true;
+                        } else {
+                            //skip_match_check = true;
+                            master_function();  // Proceed with master access
+                        }
                     }
 
                     bool match = false;
@@ -515,6 +607,14 @@ int main() {
                     // Reset the tag buffer for the next tag
                     Curr_Byte = 0;
                 }
+            }
+        }
+        if (access_locked) {
+            time_t current_time = time(NULL);
+            double seconds_elapsed = difftime(current_time, lockout_start_time);
+            if (seconds_elapsed >= 10) {
+                access_locked = false;  // Unlock after timeout
+                //printf("Access now unlocked.\n");
             }
         }
     }
