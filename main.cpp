@@ -20,13 +20,13 @@ int main() {
 
         RFID_Read();
 
+        //scanKeypad();
+        //wait_us(100000); // Debounce delay
+
         // Wheel.Speed(duty,duty);
         // wait_us(500000);
         // Wheel.Speed(0,0);
         // wait_us(1000000);
-
-        //scanKeypad();
-        //wait_us(100000); // Debounce delay
 
         // int dist = getdistance()/10;
         // printf("distance is %dcm\n", dist);

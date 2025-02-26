@@ -19,5 +19,8 @@ void rename_tag();
 void master_function();
 void RFID_Read();
 
+// Global variables
+extern UnbufferedSerial esp32;  // TX, RX pins
+
 
 #endif

@@ -1,4 +1,5 @@
 #include "Keypad.h"
+#include "RFID.h"
 
 // Define row pins (outputs)
 DigitalOut row1(D5);
@@ -12,7 +13,7 @@ DigitalIn col2(A5, PullUp);
 DigitalIn col3(A2, PullUp); 
 DigitalIn col4(A3, PullUp);
 
-DigitalOut buzzer(D8);  // Buzzer
+DigitalOut buzzer(A1);  // Buzzer
 
 // Define correct password 
 char correctPassword[] = {'1', '2', '3', '4'};
@@ -20,7 +21,27 @@ char enteredPassword[4];  // Array to store entered password
 int passwordIndex = 0;    // Index to track entered password position
 bool lastKeyState[4][4] = {false};  // 4 rows x 4 columns keypad
 
+// Track incorrect attempts and timeout flag
+int incorrectAttempts = 0;
+bool timeoutFlag = false;
+
+// Function to reset the timeout and incorrect attempts
+void resetTimeout() {
+    incorrectAttempts = 0;
+    timeoutFlag = true;
+    buzzer = 1;  // Alert with buzzer
+    wait_us(2000000);     // Buzzer alert for 1 second
+    buzzer = 0;
+    wait_us(10000000);    // 10 seconds timeout
+    timeoutFlag = false;
+}
+
 void scanKeypad() {
+    // If in timeout, skip the scanning process
+    if (timeoutFlag) {
+        return;
+    }
+
     // Set all rows to HIGH initially
     row1 = 1;
     row2 = 1;
@@ -37,8 +58,18 @@ void scanKeypad() {
 
         // Check each column for key press or release
         for (int col = 0; col < 4; col++) {
+
             // Detect key press (LOW)
-            bool currentKeyState = (col == 0 ? col1 : (col == 1 ? col2 : (col == 2 ? col3 : col4))).read() == 0; 
+            bool currentKeyState;
+            if (col == 0) {
+                currentKeyState = (col1.read() == 0);
+            } else if (col == 1) {
+                currentKeyState = (col2.read() == 0);
+            } else if (col == 2) {
+                currentKeyState = (col3.read() == 0);
+            } else {
+                currentKeyState = (col4.read() == 0);
+            }
             
             // If the key is released (column goes HIGH) and the key was previously pressed, record the key
             if (currentKeyState && !lastKeyState[row][col]) {
@@ -97,8 +128,16 @@ void scanKeypad() {
                         printf("Password correct!\n");
                     } else {
                         printf("Incorrect password!\n");
-                    }
+                    
+                        incorrectAttempts++;  // Increment incorrect attempt counter
 
+                        // If 3 incorrect attempts, trigger alert and timeout
+                        if (incorrectAttempts >= 3) {
+                            esp32.write("T\n", 2); // Send the signal to the ESP32 to trigger email alert to phone
+                            printf("\nToo many incorrect attempts. Access locked for 10 seconds.\n");
+                            resetTimeout();
+                        }
+                    }
                     // Reset the password entry
                     passwordIndex = 0;
                 }

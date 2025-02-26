@@ -1,5 +1,7 @@
 #include "RFID.h"
 
+using namespace std;
+
 // Set up the serial port for communication with ESP32
 UnbufferedSerial esp32(D1, D0, 115200);  // TX, RX pins
 // Set up the serial port for communication with RFID Reader
@@ -20,8 +22,8 @@ DigitalOut cs(PC_10);   // Chip Select
 SDCard sd(D11, D12, D13, D10, NC);  // MOSI, MISO, SCLK, CS
 
 // Vector to store the numbers as strings
-std::vector<std::string> rfid_tags;  // Stores ordered list of tags
-std::unordered_set<std::string> rfid_set;  // For quick lookups
+vector<string> rfid_tags;  // Stores ordered list of tag ID's and names (dynamic array of strings)
+unordered_set<string> rfid_set;  // For quick lookups (only tag ID's)
 
 int attempt_count = 0; // Counter for incorrect password attempts
 bool lockout_message_printed = false; // Flag to prevent multiple lockout messages
@@ -39,20 +41,20 @@ void convert_tag_to_string(uint8_t* tag_data, char* tag_string) {
 }
 
 void load_tags_from_sd() {
-    std::vector<std::string> buffer;
+    vector<string> buffer;
 
     if (sd.read_file("RFID_Tags.txt", buffer, false) == 0) {  
         rfid_tags.clear();  // Clear old tags
         rfid_set.clear();  
 
-        for (const std::string& line : buffer) {
+        for (const string& line : buffer) {
             if (!line.empty()) {
-                size_t space_pos = line.find(' ');  
-                std::string tag_id = line.substr(0, 24);  // Extract tag ID
+                size_t space_pos = line.find(' ');   // Find space between tag ID and name
+                string tag_id = line.substr(0, 24);  // Extract tag ID
                 
-                // Remove spaces
-                std::string clean_tag(tag_id);
-                clean_tag.erase(std::remove_if(clean_tag.begin(), clean_tag.end(), ::isspace), clean_tag.end());
+                // Remove spaces in tag ID
+                string clean_tag(tag_id);
+                clean_tag.erase(remove_if(clean_tag.begin(), clean_tag.end(), ::isspace), clean_tag.end());
 
                 rfid_tags.push_back(line);  // Store full tag (ID + Name)
                 rfid_set.insert(clean_tag);  // Store only the cleaned tag ID for quick lookup
@@ -70,7 +72,12 @@ void load_tags_from_sd() {
 }
 
 void process_tag(bool isAdding) {
-    printf(isAdding ? "\nAdd function selected\nPlease scan the RFID tag...\n" : "\nRemove function selected\nPlease scan the RFID tag...\n");
+    if (isAdding) {
+    printf("\nAdd function selected\nPlease scan the RFID tag...\n");
+    } 
+    else {
+        printf("\nRemove function selected\nPlease scan the RFID tag...\n");
+    }
 
     curr_Byte = 0;  // Track number of bytes received
     // Timeout timer for when waiting for tag to be scanned (to be added or removed)
@@ -105,8 +112,8 @@ void process_tag(bool isAdding) {
                     if (isAdding) {
 
                         // Clean the tag - remove any spaces
-                        std::string clean_tag(tag_string);
-                        clean_tag.erase(std::remove_if(clean_tag.begin(), clean_tag.end(), ::isspace), clean_tag.end());
+                        string clean_tag(tag_string);
+                        clean_tag.erase(remove_if(clean_tag.begin(), clean_tag.end(), ::isspace), clean_tag.end());
 
                         // Can't add a tag that's already in the system (prevents duplicates)
                         if (rfid_set.find(clean_tag) != rfid_set.end()) {
@@ -119,11 +126,14 @@ void process_tag(bool isAdding) {
                         printf("Enter a name for this tag: ");
                         fgets(tag_name, sizeof(tag_name), stdin);
 
-                        // Flush buffer
-                        while (getchar() != '\n' && getchar() != EOF);
+                        // Remove the newline character at the end if present
+                        size_t len = strlen(tag_name);
+                        if (len > 0 && tag_name[len - 1] == '\n') {
+                            tag_name[len - 1] = '\0';
+                        }
 
                         // Combine the tag ID with it's associated name
-                        std::string tag_entry = clean_tag + " " + tag_name;
+                        string tag_entry = clean_tag + " " + tag_name;
                         // Add to list of stored tags
                         rfid_tags.push_back(tag_entry);
                         rfid_set.insert(clean_tag);
@@ -131,13 +141,13 @@ void process_tag(bool isAdding) {
                         printf("\nTag added successfully: %s (%s)\n", tag_string, tag_name);
 
                         // Prepare all tags for writing to the SD card (add new lines)
-                        std::string all_tags;
+                        string all_tags;
                         for (const auto &tag : rfid_tags) {
                             all_tags += tag + "\n";
                         }
 
                         // Convert string to a character buffer
-                        std::vector<char> buffer(all_tags.begin(), all_tags.end());
+                        vector<char> buffer(all_tags.begin(), all_tags.end());
                         buffer.push_back('\0');
 
                         // Write all tags to SD card
@@ -147,33 +157,33 @@ void process_tag(bool isAdding) {
                     // For when removing a tag
                     else {
                         // Searches the first 24 characters on each tag for a matching ID (ignores the name)
-                        auto it = std::find_if(rfid_tags.begin(), rfid_tags.end(),
-                        [&](const std::string &entry) {
+                        auto TAG = find_if(rfid_tags.begin(), rfid_tags.end(),
+                        [&](const string &entry) {
                             return entry.substr(0, 24) == tag_string;
                         });
 
-                        // If no tag found
-                        if (it != rfid_tags.end()) {
-                            std::string tag_name = "Unknown";
-                            size_t space_pos = it->find(' ');
+                        // If a matching tag is found
+                        if (TAG != rfid_tags.end()) {
+                            string tag_name = "Unknown";  // default for if the tag doesn't have a name
+                            size_t space_pos = TAG->find(' ');
                             // Extract the name of the found tag
-                            if (space_pos != std::string::npos) {
-                                tag_name = it->substr(space_pos + 1);
+                            if (space_pos != string::npos) {
+                                tag_name = TAG->substr(space_pos + 1);
                             }
 
                             // Remove tag from all lists 
-                            rfid_tags.erase(it);
+                            rfid_tags.erase(TAG);
                             rfid_set.erase(tag_string);  
                             printf("\nTag removed successfully: %s (%s)\n", tag_string, tag_name.c_str());
 
                             // Rebuild the tag list 
-                            std::string all_tags;
+                            string all_tags;
                             for (const auto &tag : rfid_tags) {
                                 all_tags += tag + "\n";
                             }
 
                             // Prepare list for writing to SD card
-                            std::vector<char> buffer(all_tags.begin(), all_tags.end());
+                            vector<char> buffer(all_tags.begin(), all_tags.end());
                             buffer.push_back('\0');
 
                             // Write updated tag list to SD card
@@ -215,17 +225,17 @@ void rename_tag() {
                     convert_tag_to_string(add_data, tag_string);
 
                     // Search for the tag in the system
-                    auto it = std::find_if(rfid_tags.begin(), rfid_tags.end(),
-                        [&](const std::string& entry) {
+                    auto TAG = find_if(rfid_tags.begin(), rfid_tags.end(),
+                        [&](const string& entry) {
                             return entry.substr(0, 24) == tag_string;
                         });
 
-                    if (it != rfid_tags.end()) {
+                    if (TAG != rfid_tags.end()) {
                         // Extract the current name
-                        std::string old_name = "Unknown";
-                        size_t space_pos = it->find(' ');
-                        if (space_pos != std::string::npos) {
-                            old_name = it->substr(space_pos + 1);
+                        string old_name = "Unknown";
+                        size_t space_pos = TAG->find(' ');
+                        if (space_pos != string::npos) {
+                            old_name = TAG->substr(space_pos + 1);
                         }
 
                         // Prompt user for a new name
@@ -233,20 +243,23 @@ void rename_tag() {
                         printf("Current Name: %s\nEnter new name: ", old_name.c_str());
                         fgets(new_name, sizeof(new_name), stdin);  // Read new name
 
-                        // Flush input buffer (prevents invalid inputs next time user types)
-                        while (getchar() != '\n' && getchar() != EOF);
+                        // Remove the newline character at the end if present
+                        size_t len = strlen(new_name);
+                        if (len > 0 && new_name[len - 1] == '\n') {
+                            new_name[len - 1] = '\0';
+                        }
 
                         // Update the tag's name
-                        *it = std::string(tag_string) + " " + new_name;
+                        *TAG = string(tag_string) + " " + new_name;
                         printf("Tag renamed successfully: %s -> %s\n", old_name.c_str(), new_name);
 
                         // Update SD card file
-                        std::string all_tags;
+                        string all_tags;
                         for (const auto& tag : rfid_tags) {
                             all_tags += tag + "\n";
                         }
 
-                        std::vector<char> buffer(all_tags.begin(), all_tags.end());
+                        vector<char> buffer(all_tags.begin(), all_tags.end());
                         buffer.push_back('\0');
 
                         sd.write_file("RFID_Tags.txt", buffer.data(), false, false);
@@ -275,7 +288,7 @@ void master_function()
             double seconds_elapsed = difftime(current_time, lockout_start_time);
 
             if (seconds_elapsed < 10) {
-                // If less than 30 seconds have passed since the last attempt, deny access
+                // If less than 30 seconds have passed since the last failed attempt, deny access
                 if (!lockout_message_printed) {
                     printf("\nAccess Locked. Please wait before trying again.\n");
                     access_locked = true;  // Lock access
@@ -369,14 +382,14 @@ void RFID_Read()
             // Check if we've received the full tag
             if (curr_Byte >= 12) {
                 char tag_string[25];  // 12 bytes (2 hex digits per byte + null terminator)
-                convert_tag_to_string(add_data, tag_string);
+                convert_tag_to_string(tag_data, tag_string);
 
                 char master[] = "023341303036424537464334"; // Master access tag ID for comparison
 
                 if (strcmp(tag_string, master) == 0) {
                     skip_match_check = true;  // Set flag to skip checking the tag (master tag isn't in the system)
                     if (access_locked) {
-                        printf("Access Denied\n");  // Deny access if locked
+                        printf("Access Denied\n");  // Deny access if in lock out period
                     } else {
                         master_function();  // Proceed with master access
                     }
@@ -392,14 +405,14 @@ void RFID_Read()
                 // If the scanned tag is in the system
                 if ((match == true) && (skip_match_check == false)){
                     // Find the tag's full entry in rfid_tags
-                    std::string tag_name = "Unknown";
+                    string tag_name = "Unknown";
 
                     // Iterate through all stored tag entries to find a match           
                     for (const auto& entry : rfid_tags) {
                         if (entry.substr(0, 24) == tag_string) {  // Compare first 24 characters (tag ID) with scanned tag
                             size_t space_pos = entry.find(' ');   // Find position of first space (separates ID from name)
                             // If a space is found, extract the tag name from the entry
-                            if (space_pos != std::string::npos) {
+                            if (space_pos != string::npos) {
                                 tag_name = entry.substr(space_pos + 1);  // Assign name
                             }
                             break;   // Exit the loop early since the matching tag has been found
