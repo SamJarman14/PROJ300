@@ -19,8 +19,12 @@ void rename_tag();
 void master_function();
 void RFID_Read();
 
-// Global variables
-extern UnbufferedSerial esp32;  // TX, RX pins
+// Global mutex lock for UART
+extern Mutex uart_mutex;
 
+// Global variables
+extern UnbufferedSerial esp32;  
+extern UnbufferedSerial serial_port; 
+extern DigitalOut cs;
 
 #endif

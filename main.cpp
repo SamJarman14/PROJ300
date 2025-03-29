@@ -1,35 +1,12 @@
 #include "mbed.h"
-#include "getdistance.h"
-#include "motor.h"
 #include "Keypad.h"
 #include "RFID.h"
 
-//Motor Wheel(D13,D11,D9,D10);   //Instance of the Motor Class called 'Wheel' see motor.h and motor.cpp
-
-//Variable 'duty' to vary speed as required 
-//float duty = 0.9;
-
+Thread t1, t2;
 
 int main() {
-
     printf("\nSystem Running...\n");
-    
     load_tags_from_sd();   // Load active tags from SD card memory at startup
-
-    while(true) {
-
-        RFID_Read();
-
-        //scanKeypad();
-        //wait_us(100000); // Debounce delay
-
-        // Wheel.Speed(duty,duty);
-        // wait_us(500000);
-        // Wheel.Speed(0,0);
-        // wait_us(1000000);
-
-        // int dist = getdistance()/10;
-        // printf("distance is %dcm\n", dist);
-        // wait_us(100000);
-    }
+    t1.start(RFID_Read);
+    t2.start(scanKeypad);
 }

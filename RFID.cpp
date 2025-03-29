@@ -357,7 +357,9 @@ void master_function()
             
             if (attempt_count >= 3) {
                 // Action after 3 incorrect attempts
+                uart_mutex.lock();
                 esp32.write("T\n", 2); // Send the signal to the ESP32 to trigger email alert to phone
+                uart_mutex.unlock();
                 printf("\nToo many incorrect attempts. Access locked for 10 seconds.\n");
                 access_locked = true;  // Lock access
                 return;
@@ -368,19 +370,26 @@ void master_function()
 
 void RFID_Read()
 {
-    if (serial_port.readable()) {
-        // Read one byte from the RFID reader
-        int Byte = serial_port.read(&tag_data[curr_Byte], 1);
+    while(true){
+        if (serial_port.readable()) {
+            // Read one byte from the RFID reader
+            int Byte = serial_port.read(&tag_data[curr_Byte], 1);
 
-        // To skip checking for a match when master card is scanned
-        bool skip_match_check = false;
+            // To skip checking for a match when master card is scanned
+            bool skip_match_check = false;
 
-        // Check if the byte is valid
-        if (Byte > 0) {
-            curr_Byte++;  // Move to the next byte in the buffer
-            
-            // Check if we've received the full tag
-            if (curr_Byte >= 12) {
+            // Check if the byte is valid
+            if (Byte > 0) {
+                curr_Byte++;  // Move to the next byte in the buffer
+                
+                // Check if we've received the full tag
+                while (curr_Byte < 12) {  // Ensure we read exactly 12 bytes
+                    if (serial_port.readable()) { 
+                        serial_port.read(&tag_data[curr_Byte], 1);  
+                        curr_Byte++;
+                    }
+                }   
+                
                 char tag_string[25];  // 12 bytes (2 hex digits per byte + null terminator)
                 convert_tag_to_string(tag_data, tag_string);
 
@@ -429,6 +438,59 @@ void RFID_Read()
                     
                     // Print the time and date the tag was scanned
                     printf("%02d/%02d/20%02d %02d:%02d:%02d\n", Calendar.date, Calendar.month, Calendar.year, Time.hours, Time.minutes, Time.seconds);
+
+                    // Send signal to ESP32 to open the vehicle gate
+                    uart_mutex.lock();
+                    esp32.write("O\n", 2); 
+                    uart_mutex.unlock();
+
+                    char entry = 0;
+                    string Entry_Exit = "Unknown";
+
+                    // Wait until ESP32 sends entry status ('Y' or 'N')
+                    while (!esp32.readable()) {
+                        ThisThread::sleep_for(50ms);  // Wait a bit before checking again
+                    }
+
+                    esp32.read(&entry, 1);
+
+                    if (entry == 'Y') {
+                        printf("Entry\n");
+                        Entry_Exit = "Entry";
+                    } 
+                    else if (entry == 'N') {
+                        printf("Exit\n");
+                        Entry_Exit = "Exit";
+                    } 
+                    else {
+                        printf("ERROR: Unknown Serial Communication Command: %c\n", entry);
+                    }
+
+                    char complete = 0;
+
+                    // Wait for 'C' confirmation after the motor action
+                    while (!esp32.readable()) {
+                        ThisThread::sleep_for(50ms);
+                    }
+
+                    esp32.read(&complete, 1);
+
+                    if (complete == 'C') {
+                        printf("Complete\n");
+                    } 
+                    else {
+                        printf("ERROR: Unknown Serial Communication Command: %c\n", complete);
+                    }
+
+                    char buffer[64];  // Buffer to hold data
+
+                    // Format the data into the buffer
+                    sprintf(buffer, "\n\n%s\n%s\n%02d/%02d/20%02d %02d:%02d:%02d\n",
+                        Entry_Exit.c_str(), tag_name.c_str(), Calendar.date, Calendar.month, Calendar.year,
+                        Time.hours, Time.minutes, Time.seconds);
+
+                    // Write the formatted string to the SD card
+                    sd.write_file("log.txt", buffer, true, false);
                 }
                 // If tag isn't in the sysetm
                 else if((match == false) && (skip_match_check == false)){
@@ -440,16 +502,18 @@ void RFID_Read()
                 }
                 // Reset the tag buffer for the next tag
                 curr_Byte = 0;
+                
+            }
+        }
+        
+        if (access_locked) {
+            // Calculate time elapsed since the master access lockout
+            time_t current_time = time(NULL);
+            double seconds_elapsed = difftime(current_time, lockout_start_time);
+            if (seconds_elapsed >= 10) {
+                access_locked = false;  // Unlock after timeout
             }
         }
     }
-    
-    if (access_locked) {
-        // Calculate time elapsed since the master access lockout
-        time_t current_time = time(NULL);
-        double seconds_elapsed = difftime(current_time, lockout_start_time);
-        if (seconds_elapsed >= 10) {
-            access_locked = false;  // Unlock after timeout
-        }
-    }
+    ThisThread::sleep_for(100ms);
 }

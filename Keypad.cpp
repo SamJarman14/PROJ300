@@ -15,6 +15,12 @@ DigitalIn col4(A3, PullUp);
 
 DigitalOut buzzer(A1);  // Buzzer
 
+DigitalIn gateSwitch(D8, PullUp);  // Limit switch 
+
+Timer gateTimer;   // Timer to track open gate time
+
+Mutex uart_mutex; // Mutex for UART communication
+
 // Define correct password 
 char correctPassword[] = {'1', '2', '3', '4'};
 char enteredPassword[4];  // Array to store entered password
@@ -37,119 +43,188 @@ void resetTimeout() {
 }
 
 void scanKeypad() {
-    // If in timeout, skip the scanning process
-    if (timeoutFlag) {
-        return;
-    }
-
-    // Set all rows to HIGH initially
-    row1 = 1;
-    row2 = 1;
-    row3 = 1;
-    row4 = 1;
-
-    // Scan rows one by one
-    for (int row = 0; row < 4; row++) {
-        // Activate the current row by setting it LOW
-        if (row == 0) row1 = 0;
-        if (row == 1) row2 = 0;
-        if (row == 2) row3 = 0;
-        if (row == 3) row4 = 0;
-
-        // Check each column for key press or release
-        for (int col = 0; col < 4; col++) {
-
-            // Detect key press (LOW)
-            bool currentKeyState;
-            if (col == 0) {
-                currentKeyState = (col1.read() == 0);
-            } else if (col == 1) {
-                currentKeyState = (col2.read() == 0);
-            } else if (col == 2) {
-                currentKeyState = (col3.read() == 0);
-            } else {
-                currentKeyState = (col4.read() == 0);
-            }
-            
-            // If the key is released (column goes HIGH) and the key was previously pressed, record the key
-            if (currentKeyState && !lastKeyState[row][col]) {
-                char key = '\0';  // Initialize the key variable
-
-                // Map the row and column to the corresponding key
-                if (row == 0) {
-                    if (col == 0) key = '1';
-                    if (col == 1) key = '2';
-                    if (col == 2) key = '3';
-                    if (col == 3) key = 'A';
-                }
-                else if (row == 1) {
-                    if (col == 0) key = '4';
-                    if (col == 1) key = '5';
-                    if (col == 2) key = '6';
-                    if (col == 3) key = 'B';
-                }
-                else if (row == 2) {
-                    if (col == 0) key = '7';
-                    if (col == 1) key = '8';
-                    if (col == 2) key = '9';
-                    if (col == 3) key = 'C';
-                }
-                else if (row == 3) {
-                    if (col == 0) key = '*';
-                    if (col == 1) key = '0';
-                    if (col == 2) key = '#';
-                    if (col == 3) key = 'D';
-                }
-
-                // If the key is valid, add it to the entered password
-                if (key != '\0' && passwordIndex < 4) {
-                    enteredPassword[passwordIndex++] = key;  // Store the entered key
-                    printf("Key %c entered\n", key);  // Print the entered key
-
-                    // Activate the buzzer for 1 second when a valid key is pressed
-                    buzzer = 1;  
-                    wait_us(250000);  
-                    buzzer = 0; 
-                }
-
-                // If the password is fully entered, check if correct
-                if (passwordIndex == 4) {
-                    // Compare entered password with correct password
-                    bool correct = true;
-                    for (int i = 0; i < 4; i++) {
-                        if (enteredPassword[i] != correctPassword[i]) {
-                            correct = false;
-                            break;
-                        }
-                    }
-
-                    // Print the result based on the comparison
-                    if (correct) {
-                        printf("Password correct!\n");
-                    } else {
-                        printf("Incorrect password!\n");
-                    
-                        incorrectAttempts++;  // Increment incorrect attempt counter
-
-                        // If 3 incorrect attempts, trigger alert and timeout
-                        if (incorrectAttempts >= 3) {
-                            esp32.write("T\n", 2); // Send the signal to the ESP32 to trigger email alert to phone
-                            printf("\nToo many incorrect attempts. Access locked for 10 seconds.\n");
-                            resetTimeout();
-                        }
-                    }
-                    // Reset the password entry
-                    passwordIndex = 0;
-                }
-            }
-            // Update the last key state to the current state
-            lastKeyState[row][col] = currentKeyState;
+    while(true){
+        // If in timeout, skip the scanning process
+        if (timeoutFlag) {
+            return;
         }
 
-        // Deactivate the current row by setting it HIGH
-        if (row == 0) row1 = 1;
-        if (row == 1) row2 = 1;
-        if (row == 2) row3 = 1;
-        if (row == 3) row4 = 1;
+        // Set all rows to HIGH initially
+        row1 = 1;
+        row2 = 1;
+        row3 = 1;
+        row4 = 1;
+
+        // Scan rows one by one
+        for (int row = 0; row < 4; row++) {
+            // Activate the current row by setting it LOW
+            if (row == 0) row1 = 0;
+            if (row == 1) row2 = 0;
+            if (row == 2) row3 = 0;
+            if (row == 3) row4 = 0;
+
+            // Check each column for key press or release
+            for (int col = 0; col < 4; col++) {
+
+                // Detect key press (LOW)
+                bool currentKeyState;
+                if (col == 0) {
+                    currentKeyState = (col1.read() == 0);
+                } else if (col == 1) {
+                    currentKeyState = (col2.read() == 0);
+                } else if (col == 2) {
+                    currentKeyState = (col3.read() == 0);
+                } else {
+                    currentKeyState = (col4.read() == 0);
+                }
+
+                // If the key is released (column goes HIGH) and the key was previously pressed, record the key
+                if (currentKeyState && !lastKeyState[row][col]) {
+                    char key = '\0';  // Initialize the key variable
+
+                    // Map the row and column to the corresponding key
+                    if (row == 0) {
+                        if (col == 0) key = '1';
+                        if (col == 1) key = '2';
+                        if (col == 2) key = '3';
+                        if (col == 3) key = 'A';
+                    }
+                    else if (row == 1) {
+                        if (col == 0) key = '4';
+                        if (col == 1) key = '5';
+                        if (col == 2) key = '6';
+                        if (col == 3) key = 'B';
+                    }
+                    else if (row == 2) {
+                        if (col == 0) key = '7';
+                        if (col == 1) key = '8';
+                        if (col == 2) key = '9';
+                        if (col == 3) key = 'C';
+                    }
+                    else if (row == 3) {
+                        if (col == 0) key = '*';
+                        if (col == 1) key = '0';
+                        if (col == 2) key = '#';
+                        if (col == 3) key = 'D';
+                    }
+
+                    // If the key is valid, add it to the entered password
+                    if (key != '\0' && passwordIndex < 4) {
+                        enteredPassword[passwordIndex++] = key;  // Store the entered key
+                        printf("Key %c entered\n", key);  // Print the entered key
+
+                        // Activate the buzzer for 1 second when a valid key is pressed
+                        buzzer = 1;  
+                        wait_us(250000);  
+                        buzzer = 0; 
+                    }
+                }
+                // Update the last key state to the current state
+                lastKeyState[row][col] = currentKeyState;
+            }
+
+            // Deactivate the current row by setting it HIGH
+            if (row == 0) row1 = 1;
+            if (row == 1) row2 = 1;
+            if (row == 2) row3 = 1;
+            if (row == 3) row4 = 1;
+        }
+
+        // Once password is fully entered, check if it's correct
+        if (passwordIndex == 4) {
+            // Compare entered password with correct password
+            bool correct = true;
+            for (int i = 0; i < 4; i++) {
+                if (enteredPassword[i] != correctPassword[i]) {
+                    correct = false;
+                    break;
+                }
+            }
+
+            if (correct) {
+                printf("Password correct!\n");
+
+                //uart_mutex.lock();
+                esp32.write("G\n", 2);   // Send signal to ESP32 to open the pedestrian gate
+                //uart_mutex.unlock();
+
+                char complete = 0;
+
+                // Wait for 'C' confirmation after the motor action
+                while (!esp32.readable()) {
+                    ThisThread::sleep_for(50ms);
+                }
+
+                esp32.read(&complete, 1);
+
+                if (complete == 'C') {
+                    printf("Complete\n");
+                } 
+                else {
+                    printf("ERROR: Unknown Serial Communication Command: %c\n", complete);
+                }
+
+                wait_us(250000);  // Wait 0.25s for limit switch to be released after gate opens 
+
+                gateTimer.start();  // Start the timer when the gate is opened
+                bool gateOpened = false;  // Tracks if the gate was opened
+                bool warningPrinted = false;  // Flag to track if warning was printed
+
+                while (true) {
+                    // Check if gate is open (limit switch not pressed)
+                    if (gateSwitch == 0) {  // Gate is OPEN when the limit switch is HIGH (not pressed)
+                        if (!gateOpened) {
+                            gateOpened = true;  // Mark that the gate was opened
+                            printf("Gate opened.\n");
+                        }
+
+                        // Check if the gate has been open for 10 seconds
+                        if (gateTimer.elapsed_time() >= 10s && !warningPrinted) {
+                            uart_mutex.lock();
+                            esp32.write("T\n", 2); // Send the signal to the ESP32 to trigger email alert to phone
+                            uart_mutex.unlock();
+                            printf("Warning: Gate left open!\n");
+                            warningPrinted = true;  // Set flag so it doesn't print again
+                        }
+                    } 
+                    else if (gateSwitch == 1){  // Gate is closed (limit switch pressed)
+                        if (gateOpened) {  
+                            // If the gate was previously opened, trigger closing signal
+                            printf("Closing gate...\n");
+                            uart_mutex.lock();
+                            esp32.write("C\n", 2);   // Send signal to ESP32 to close the pedestrian gate
+                            uart_mutex.unlock();
+                            gateOpened = false;  // Reset the flag
+                        }
+
+                        gateTimer.stop();  // Stop the timer when the gate is closed
+                        gateTimer.reset();  // Reset the timer when gate is closed
+                        warningPrinted = false;  // Reset flag for next time
+                        break;  // Exit the loop once the gate is closed
+                    }
+
+                    // Add a small delay to prevent the loop from running too fast
+                    ThisThread::sleep_for(100ms);
+        
+                }
+                passwordIndex = 0;  // Reset after correct entry
+            } else {
+                printf("Incorrect password!\n");
+                incorrectAttempts++;  // Increment incorrect attempt counter
+
+                if (incorrectAttempts >= 3) {
+                    uart_mutex.lock();
+                    esp32.write("T\n", 2);  // Trigger alert for too many incorrect attempts
+                    uart_mutex.unlock();
+                    printf("\nToo many incorrect attempts. Access locked for 10 seconds.\n");
+                    resetTimeout();
+                }
+
+                // Reset after incorrect password
+                passwordIndex = 0;  // Reset password index
+            }
+        }
+
+        ThisThread::sleep_for(100ms);  // Avoid overloading the CPU
     }
 }
