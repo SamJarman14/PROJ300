@@ -1,6 +1,13 @@
 #include "SDCard.h"
 #include <fstream>
 
+
+
+
+// This code was provided by The University of Plymouth for a previous coursework 
+
+
+
 // Function: SDCard class constructor
 // Initialises the SDBlockDevice object
 SDCard::SDCard(PinName mosi,PinName miso,PinName sclk,PinName cs, PinName detect) : sd(mosi,miso,sclk,cs), sd_detect(detect){
