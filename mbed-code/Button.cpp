@@ -1,22 +1,14 @@
 #include "Button.h"
 #include "RFID.h"
 #include "Keypad.h"
+
+DigitalIn button(D9); 
     
-volatile bool buttonPressed = false;    // Flag set in ISR
 Timer debounceTimer;
 Timer gate_timer;                       // Timer to track open gate time
 
-// Button interrupt handler
-void onButtonPress() {
-    if (debounceTimer.elapsed_time().count() >= 200000) {       // Check elapsed time before flagging (debounce)
-        buttonPressed = true;
-        debounceTimer.reset(); 
-    }
-}
-
 void monitor_button(){    
-    if (buttonPressed) {
-        buttonPressed = false;          // Clear flag
+    if (button == 0) {
         uart_mutex.lock();
         esp32.write("G\n", 2);          // Send signal to ESP32 to open the pedestrian gate
         uart_mutex.unlock();
@@ -37,6 +29,7 @@ void monitor_button(){
         }
 
         string Exit_Entry = "Exit";
+        printf("Exit\n");
         char buffer[64];            // Buffer to hold data
         string passcode_name = "Unknown";
 
@@ -78,6 +71,7 @@ void monitor_button(){
                     esp32.write("C\n", 2);          // Send signal to ESP32 to close the pedestrian gate
                     uart_mutex.unlock();
                     gateOpened = false;             // Reset the flag
+                    ThisThread::sleep_for(500ms);
                 }
 
                 gate_timer.stop();          // Stop the timer when the gate is closed

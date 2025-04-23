@@ -577,6 +577,7 @@ void scanKeypad() {
                 }
 
                 string Exit_Entry = "Entry";
+                printf("Entry\n");
 
                 char buffer[64];            // Buffer to hold data
 

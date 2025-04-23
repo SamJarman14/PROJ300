@@ -360,6 +360,7 @@ void master_function()
                 uart_mutex.lock();
                 esp32.write("M\n", 2);              // Send the signal to the ESP32 to trigger email alert to phone
                 uart_mutex.unlock();
+
                 printf("\nToo many incorrect attempts. Access locked for 10 seconds.\n");
                 access_locked = true;               // Lock access
                 return;
