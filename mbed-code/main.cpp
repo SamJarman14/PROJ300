@@ -11,8 +11,7 @@ int main() {
     load_tags_from_sd();           // Load active tags from SD card memory at startup
     load_passcodes_from_sd();      // Load active passcodes from SD card memory at startup
     t1.start(RFID_Read);
-    t2.start(scanKeypad);2
-    +++++++++++++++++++++++++++++
+    t2.start(scanKeypad);
 
     debounceTimer.start();         // Start the timer
 

@@ -4,7 +4,7 @@
 
 void sendIFTTTAlert_Ped_MA() {
     HTTPClient http;
-    http.begin("https://maker.ifttt.com/trigger/Pedestrian Master Access/with/key/ftNHaGmQYdqgmhMbwAOb7pBOOWrPxy8-55Har2kYnVy");
+    http.begin("https://maker.ifttt.com/trigger/Pedestrian_Master_Access/with/key/kPjTMn6CZLRaN4xK1O49muVgoR1m022swTGm-es3Qqp");
 
     int httpCode = http.GET();
     if (httpCode > 0) {
@@ -18,7 +18,7 @@ void sendIFTTTAlert_Ped_MA() {
 
 void sendIFTTTAlert_Veh_MA() {
     HTTPClient http;
-    http.begin("https://maker.ifttt.com/trigger/Vehicle Master Access /with/key/ftNHaGmQYdqgmhMbwAOb7pBOOWrPxy8-55Har2kYnVy");
+    http.begin("https://maker.ifttt.com/trigger/Vehicle_Master_Access/with/key/kPjTMn6CZLRaN4xK1O49muVgoR1m022swTGm-es3Qqp");
 
     int httpCode = http.GET();
     if (httpCode > 0) {
@@ -32,7 +32,7 @@ void sendIFTTTAlert_Veh_MA() {
 
 void sendIFTTTAlert_Gate_Open() {
     HTTPClient http;
-    http.begin("https://maker.ifttt.com/trigger/Pedestrian Gate Left Open/with/key/ftNHaGmQYdqgmhMbwAOb7pBOOWrPxy8-55Har2kYnVy");
+    http.begin("https://maker.ifttt.com/trigger/Gate_Left_Open/with/key/kPjTMn6CZLRaN4xK1O49muVgoR1m022swTGm-es3Qqp");
 
     int httpCode = http.GET();
     if (httpCode > 0) {
@@ -46,7 +46,7 @@ void sendIFTTTAlert_Gate_Open() {
 
 void sendIFTTTAlert_Inc_Pasc() {
     HTTPClient http;
-    http.begin("https://maker.ifttt.com/trigger/Pedestrian Gate Keypad Passcode/with/key/ftNHaGmQYdqgmhMbwAOb7pBOOWrPxy8-55Har2kYnVy");
+    http.begin("https://maker.ifttt.com/trigger/Pedestrian_Passcodes/with/key/kPjTMn6CZLRaN4xK1O49muVgoR1m022swTGm-es3Qqp");
 
     int httpCode = http.GET();
     if (httpCode > 0) {

@@ -9,7 +9,13 @@
 const int ledPin = 2;  // GPIO2 for built-in LED
 
 #define RX_PIN 16  // RX 
+
 #define TX_PIN 17  // TX
+
+volatile bool triggerPedAlert = false;
+volatile bool triggerVehAlert = false;
+volatile bool triggerGateLeftOpen = false;
+volatile bool triggerPasscodeAlert = false;
 
 void setup() {
   Serial.begin(115200);  // Initialise the serial monitor
@@ -39,9 +45,8 @@ void setup() {
   pinMode(TRIGGER_PIN_B, OUTPUT);
   pinMode(ECHO_PIN_B, INPUT);
 
-  Set up a serial data receiver interrupt
+  // Set up a serial data receiver interrupt
   Serial1.onReceive(serialEvent);
-
 }
 
 void serialEvent() {
@@ -62,13 +67,12 @@ void serialEvent() {
         entry = 'N';
         Serial1.write('N');              // Send signal to Nucleo that an exit was detected
         Serial.println("Exit");
-      }
-
-      MotorA_Forward();
-      delay(575);
-      MotorA_Stop();   
+      }   
 
       if (entry == 'Y') {
+        MotorA_Forward();
+        delay(620);
+        MotorA_Stop();  
         while (true) {
           float avgDist_B = ULT_SEN_B();         // Get ultrasonic sensor B distance
 
@@ -79,7 +83,7 @@ void serialEvent() {
             }
 
             MotorA_Reverse();
-            delay(575);
+            delay(500);
             MotorA_Stop();
 
             Serial1.write('C');                  // Send signal over to Nucleo that the gate closing is complete
@@ -89,6 +93,9 @@ void serialEvent() {
       }
 
       if (entry == 'N') {
+        MotorA_Reverse();
+        delay(100);
+        MotorA_Stop();
         while (true) {
           float avgDist_A = ULT_SEN_A();         // Get ultrasonic sensor A distance
 
@@ -98,8 +105,8 @@ void serialEvent() {
               delay(100);                        // Avoid excessive polling
             }
 
-            MotorA_Reverse();
-            delay(575);
+            MotorA_Forward();
+            delay(100);
             MotorA_Stop();
 
             Serial1.write('C');                  // Send signal over to Nucleo that the gate closing is complete
@@ -110,38 +117,60 @@ void serialEvent() {
     }
     else if (incomingChar == 'G') {             // If the trigger character is received for opening the pedestrian gate 
       MotorB_Forward();
-      delay(62);
+      delay(250);
       MotorB_Stop();
       Serial1.write('C');                      // Send signal over to Nucleo that the gate opening is complete
     }
     else if (incomingChar == 'C') {            // If the trigger character is received for closing the pedestrian gate 
       MotorB_Reverse();
-      delay(62);
+      delay(250);
       MotorB_Stop();
     }
     else if (incomingChar == 'T') {            // If the trigger character is received for 3 incorrect master access password attempts (pedestrian gate)
-      Serial1.println("Trigger received");
-      void WiFi_Connect();
-      sendIFTTTAlert_Ped_MA();
-      WiFi.disconnect(true);
+      triggerPedAlert = true;
     }
     else if (incomingChar == 'L') {           // If the trigger character is received for the pedestrian gate being left open
-      Serial1.println("Trigger received");
-      void WiFi_Connect();
-      sendIFTTTAlert_Gate_Open();
-      WiFi.disconnect(true);
+      triggerGateLeftOpen = true;
     }
     else if (incomingChar == 'M') {          // If the trigger character is received for 3 incorrect master access password attempts (vehicle gate)
-      Serial1.println("Trigger received");
-      void WiFi_Connect();
-      sendIFTTTAlert_Veh_MA();
-      WiFi.disconnect(true);
+      triggerVehAlert = true;
     }
     else if (incomingChar == 'I') {          // If the trigger character is received for 3 incorrect keypad passcode attempts
-      Serial1.println("Trigger received");
-      void WiFi_Connect();
-      sendIFTTTAlert_Inc_Pasc();
-      WiFi.disconnect(true);
+      triggerPasscodeAlert = true;
     }
+  }
+}
+
+void loop() {
+  if (triggerPedAlert) {
+    triggerPedAlert = false;
+    Serial.println("Triggering Pedestrian Master Alert...");
+    WiFi_Connect();
+    sendIFTTTAlert_Ped_MA();
+    WiFi.disconnect(true);
+  }
+
+  if (triggerVehAlert) {
+    triggerVehAlert = false;
+    Serial.println("Triggering Vehicle Master Alert...");
+    WiFi_Connect();
+    sendIFTTTAlert_Veh_MA();
+    WiFi.disconnect(true);
+  }
+
+  if (triggerGateLeftOpen) {
+    triggerGateLeftOpen = false;
+    Serial.println("Triggering Gate Left Open Alert...");
+    WiFi_Connect();
+    sendIFTTTAlert_Gate_Open();
+    WiFi.disconnect(true);
+  }
+
+  if (triggerPasscodeAlert) {
+    triggerPasscodeAlert = false;
+    Serial.println("Triggering Incorrect Passcode Alert...");
+    WiFi_Connect();
+    sendIFTTTAlert_Inc_Pasc();
+    WiFi.disconnect(true);
   }
 }
